@@ -8,31 +8,40 @@ import (
 	"strconv"
 )
 
+func ConnectToServer () net.Conn {
+	for {
+		var address string
+		var port int
+		fmt.Println("Enter IP address:")
+		fmt.Scan(&address)
+		fmt.Scanln()
+		for {
+			var input string
+			fmt.Println("Enter port number:")
+			fmt.Scanln(&input)
+			num, err := strconv.Atoi(input)
+			if err != nil || num < 0{
+				fmt.Println("Error: invalid port number")
+				continue
+			}
+			port = num
+			break
+		}
+		// connection setup
+		conn, err := net.DialTimeout("tcp", address+":"+ strconv.Itoa(port), 3 * 1000000000) // 3 sec timeout
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("Try again")
+			continue
+		}
+		return conn
+	}
+}
+
 func main() {
 
-	var address string
-	var port int
-	fmt.Println("Enter IP address:")
-	fmt.Scan(&address)
-	for {
-		var input string
-        fmt.Println("Enter port number:")
-        fmt.Scanln(&input)
-        num, err := strconv.Atoi(input)
-        if err != nil || num < 0{
-            fmt.Println("Error: invalid port number")
-            continue
-        }
-		port = num
-        break
-    }
-	fmt.Scanln()
-	// connecting with server
-	conn, err := net.Dial("tcp", address+":"+ strconv.Itoa(port))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	conn := ConnectToServer()
+	fmt.Println("You are successfully connected to the server")
 	defer conn.Close()
 
 	// goroutine for recieving data from server

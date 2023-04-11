@@ -44,14 +44,12 @@ func main() {
             continue
         }
 		port = num
+		if isPortInUse(port) {
+			fmt.Printf("Port %d is already in use\n", port)
+			continue
+		}
         break
     }
-
-	for isPortInUse(port) {
-		fmt.Printf("Port %d is already in use\n", port)
-		fmt.Println("Enter port number:")
-		fmt.Scan(&port)
-	}
 
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -95,13 +93,14 @@ func main() {
 					fmt.Println(err)
 					return
 				}
-				if length > 1 {
+				if length > 2 {
 					client.name = string(name[:length-2])
 					fmt.Println("Connecting the new user:", client.name)
 					break
 				}
 			}
 			connectedClients[client] = true
+			conn.Write([]byte("You are in chat, enter a message\n"))
 			for {
 				conn := client.conn
 				message := make([]byte, 1024)

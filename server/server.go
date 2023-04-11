@@ -54,7 +54,7 @@ func main() {
 		for {
 			message := <-messages
 			for client := range connectedClients {
-				_, err := client.conn.Write([]byte(message + "\n"))
+				_, err := client.conn.Write([]byte(message))
 				if err != nil {
 					delete(connectedClients, client)
 				}
@@ -71,16 +71,17 @@ func main() {
 
 		go func(conn net.Conn) {
 			client := clientInf{"", conn}
-			conn.Write([]byte("Введите имя:"))
+			conn.Write([]byte("Введите имя: "))
+			//var nickname string
+			name := make([]byte, 1024)
 			for {
-				name := make([]byte, 1024)
 				length, err := conn.Read(name)
 				if err != nil {
 					fmt.Println(err)
 					return
 				}
-				if length > 0 {
-					client.name = string(name[:length-1])
+				if length > 1 {
+					client.name = string(name[:length-2])
 					fmt.Println("Подключение нового клиента:", client.name)
 					break
 				}
@@ -96,8 +97,9 @@ func main() {
 					return
 				}
 				if length > 0 {
-					messages <- fmt.Sprintf("%s", string(client.name))
-					fmt.Printf("%s: %s", string(client.name), message[:length])
+									
+					messages <- fmt.Sprintf("%s: %s", client.name, message[:length])
+					fmt.Printf("%s: %s", client.name, message[:length])
 				}
 			}
 		}(conn)

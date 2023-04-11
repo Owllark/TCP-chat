@@ -8,45 +8,47 @@ import (
 )
 
 func main() {
-	
+
 	var address string
 	var port string
 	fmt.Println("Введите ip адрес:")
 	fmt.Scan(&address)
 	fmt.Println("Введите номер порта:")
 	fmt.Scan(&port)
+	fmt.Scanln()
 	conn, err := net.Dial("tcp", address+":"+port)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer conn.Close()
-	fmt.Println("Подключение к серверу успешно установлено.")
 
 	go func() {
 		for {
-			message, err := bufio.NewReader(conn).ReadString('\n')
+			message := make([]byte, 1024)
+			length, err := conn.Read(message)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println("ERROR", err)
 				return
 			}
-			fmt.Print(message)
+			if length > 0 {
+				fmt.Print(string(message[:length]))
+			}
+
 		}
 	}()
 
 	for {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Введите сообщение: ")
 		text, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		_, err = fmt.Fprintf(conn, text)
+		_, err = conn.Write([]byte(text))
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 	}
 }
-

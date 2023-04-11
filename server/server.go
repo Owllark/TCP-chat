@@ -71,15 +71,16 @@ func main() {
 
 		go func(conn net.Conn) {
 			client := clientInf{"", conn}
-			conn.Write([]byte("Введите свое имя: "))
+			conn.Write([]byte("Введите имя:"))
 			for {
 				name := make([]byte, 1024)
 				length, err := conn.Read(name)
 				if err != nil {
+					fmt.Println(err)
 					return
 				}
 				if length > 0 {
-					client.name = string(name[:length])
+					client.name = string(name[:length-1])
 					fmt.Println("Подключение нового клиента:", client.name)
 					break
 				}
@@ -95,9 +96,8 @@ func main() {
 					return
 				}
 				if length > 0 {
-					messages <- fmt.Sprintf("%s: %s", client.name, message[:length])
-					fmt.Printf("%s: %s", client.name, message[:length])
-					fmt.Println(client.name)
+					messages <- fmt.Sprintf("%s", string(client.name))
+					fmt.Printf("%s: %s", string(client.name), message[:length])
 				}
 			}
 		}(conn)

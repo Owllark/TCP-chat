@@ -18,7 +18,7 @@ func isPortInUse(port int) bool {
 
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, fmt.Sprintf(":%d", port)) && strings.Contains(line, "LISTENING") {
+		if strings.Contains(line, fmt.Sprintf(":%d", port)){
 			return true
 		}
 	}
@@ -33,23 +33,37 @@ type clientInf struct {
 
 func main() {
 	var port int
-	fmt.Println("Введите номер порта:")
-	fmt.Scan(&port)
+	
+	for {
+		var input string
+        fmt.Println("Enter port number:")
+        fmt.Scanln(&input)
+        num, err := strconv.Atoi(input)
+        if err != nil || num < 0{
+            fmt.Println("Error: invalid port number")
+            continue
+        }
+		port = num
+        break
+    }
+
 	for isPortInUse(port) {
-		fmt.Printf("Порт %d уже используется\n", port)
-		fmt.Println("Введите номер порта:")
+		fmt.Printf("Port %d is already in use\n", port)
+		fmt.Println("Enter port number:")
 		fmt.Scan(&port)
 	}
+
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
-		fmt.Printf("Ошибка при прослушивании порта: %s\n", err)
+		fmt.Printf("Error listening on the port: %s\n", err)
 	}
 	defer listener.Close()
-	fmt.Println("Сервер запущен и слушает порт " + strconv.Itoa(port))
+	fmt.Println("Server is running and listening on the port " + strconv.Itoa(port))
 
 	connectedClients := make(map[clientInf]bool)
 	messages := make(chan string)
 
+	// sending messages to clients
 	go func() {
 		for {
 			message := <-messages
@@ -63,6 +77,7 @@ func main() {
 	}()
 
 	for {
+		// accepting new connection
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println(err)
@@ -70,9 +85,9 @@ func main() {
 		}
 
 		go func(conn net.Conn) {
+			// creating new user
 			client := clientInf{"", conn}
-			conn.Write([]byte("Введите имя: "))
-			//var nickname string
+			conn.Write([]byte("Enter your name: "))
 			name := make([]byte, 1024)
 			for {
 				length, err := conn.Read(name)
@@ -82,7 +97,7 @@ func main() {
 				}
 				if length > 1 {
 					client.name = string(name[:length-2])
-					fmt.Println("Подключение нового клиента:", client.name)
+					fmt.Println("Connecting the new user:", client.name)
 					break
 				}
 			}
@@ -92,12 +107,11 @@ func main() {
 				message := make([]byte, 1024)
 				length, err := conn.Read(message)
 				if err != nil {
-					fmt.Println("Клиент отключился:", client.name)
+					fmt.Println("User disconnected:", client.name)
 					delete(connectedClients, client)
 					return
 				}
-				if length > 0 {
-									
+				if length > 0 {			
 					messages <- fmt.Sprintf("%s: %s", client.name, message[:length])
 					fmt.Printf("%s: %s", client.name, message[:length])
 				}

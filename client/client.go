@@ -5,30 +5,43 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 )
 
 func main() {
 
 	var address string
-	var port string
-	fmt.Println("Введите ip адрес:")
+	var port int
+	fmt.Println("Enter IP address:")
 	fmt.Scan(&address)
-	fmt.Println("Введите номер порта:")
-	fmt.Scan(&port)
+	for {
+		var input string
+        fmt.Println("Enter port number:")
+        fmt.Scanln(&input)
+        num, err := strconv.Atoi(input)
+        if err != nil || num < 0{
+            fmt.Println("Error: invalid port number")
+            continue
+        }
+		port = num
+        break
+    }
 	fmt.Scanln()
-	conn, err := net.Dial("tcp", address+":"+port)
+	// connecting with server
+	conn, err := net.Dial("tcp", address+":"+ strconv.Itoa(port))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer conn.Close()
 
+	// goroutine for recieving data from server
 	go func() {
 		for {
 			message := make([]byte, 1024)
 			length, err := conn.Read(message)
 			if err != nil {
-				fmt.Println("ERROR", err)
+				fmt.Println(err)
 				return
 			}
 			if length > 0 {
@@ -38,6 +51,7 @@ func main() {
 		}
 	}()
 
+	// sending data to server
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		text, err := reader.ReadString('\n')

@@ -39,7 +39,7 @@ func main() {
         fmt.Println("Enter port number:")
         fmt.Scanln(&input)
         num, err := strconv.Atoi(input)
-        if err != nil || num < 0{
+        if err != nil || num < 0 || num <= 65535{
             fmt.Println("Error: invalid port number")
             continue
         }

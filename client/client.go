@@ -12,15 +12,16 @@ func ConnectToServer () net.Conn {
 	for {
 		var address string
 		var port int
-		fmt.Println("Enter IP address:")
-		fmt.Scan(&address)
-		fmt.Scanln()
+		//fmt.Println("Enter IP address:")
+		//fmt.Scan(&address)
+		//fmt.Scanln()
+		address = "localhost"
 		for {
 			var input string
 			fmt.Println("Enter port number:")
 			fmt.Scanln(&input)
 			num, err := strconv.Atoi(input)
-			if err != nil || num < 0{
+			if err != nil || num < 0 || num > 65535{
 				fmt.Println("Error: invalid port number")
 				continue
 			}
@@ -28,7 +29,7 @@ func ConnectToServer () net.Conn {
 			break
 		}
 		// connection setup
-		conn, err := net.DialTimeout("tcp", address+":"+ strconv.Itoa(port), 3 * 1000000000) // 3 sec timeout
+		conn, err := net.DialTimeout("tcp", address+":"+ strconv.Itoa(port), 15 * 1000000000) // 15 sec timeout
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Try again")

@@ -8,26 +8,10 @@ import (
 	"strings"
 )
 
-type serverRequestsType int
-type clientRequestsType int
-
-const (
-	ENTER_NICKNAME serverRequestsType = iota
-	CHOOSE_ROOM
-	ENTER_ROOM_PASSWORD
-	SEND_MESSAGE
-)
-
-const (
-	ESCAPE_ROOM serverRequestsType = iota
-	GET_USER_LIST
-)
-
 type clientState int
 
 const (
 	IN_LOBBY clientState = iota
-	CREATING_ROOM
 	IN_ROOM
 )
 
@@ -39,6 +23,7 @@ type clientInf struct {
 
 type roomInf struct {
 	name string
+	isOpen bool
 	password string
 	admin *clientInf
 	users map[*clientInf]bool
@@ -74,7 +59,7 @@ func GetMessage(conn net.Conn) ([]byte, error) {
 		if err != nil {
 			return []byte(""), err
 		}
-		if length > 0 {
+		if length > 2 {
 			return response[:length], err
 		}
 	}
@@ -104,13 +89,11 @@ func LaunchRoom(room *roomInf, newClients chan *clientInf, disconnectedClients c
 		for {
 			var message string
 			message = <-messages
-			fmt.Println("accept message")
 			for client := range room.users {
 				err := SendMessage(client.conn, []byte(message))
-				fmt.Println(message)
 				if err != nil {
 					delete(room.users, client)
-					fmt.Println(err)
+					disconnectedClients <- client
 				}
 			}
 		}
@@ -118,14 +101,14 @@ func LaunchRoom(room *roomInf, newClients chan *clientInf, disconnectedClients c
 	for {
 		var newClient *clientInf
 		newClient = <- newClients
-		fmt.Println(*newClient)
 		room.users[newClient] = true
+		messages <- fmt.Sprintf("%s has entered the chat\n", newClient.name)
 		go func(client clientInf) {
 			for {
 				message := make([]byte, 1024)
 				message, err := GetMessage(client.conn)
 				if err != nil {
-					fmt.Println("User disconnected:", client.name)
+					messages <- fmt.Sprintf("%s left the chat\n", newClient.name)
 					delete(room.users, &client)
 					disconnectedClients <- &client
 					return
@@ -145,9 +128,17 @@ func CreateRoom(client *clientInf) *roomInf{
 	SendMessage(client.conn, []byte("Enter name of your room:\n"))
 	name, _ := GetMessage(client.conn)
 	room.name = string(name)
-	SendMessage(client.conn, []byte("Enter password of your room or press \"Enter\" to make the room open:\n"))
-	password, _ := GetMessage(client.conn)
+	SendMessage(client.conn, []byte("Enter password of your room or press \"Space\" to make the room open:\n"))
+	password, err := GetMessage(client.conn)
 	room.password = string(password)
+	if err != nil {
+		return nil
+	}
+	if room.password == " " {
+		room.isOpen = true
+	} else {
+		room.isOpen = false
+	}
 	SendMessage(client.conn, []byte("You successfully created the room!\n"))
 	return &room
 }
@@ -186,6 +177,21 @@ func main() {
 	disconnectedClients := make(map[*roomInf] chan *clientInf)
 
 
+	go func() {
+		for {
+			for room := range disconnectedClients {
+				select {
+				case <- disconnectedClients[room]:
+					client := <- disconnectedClients[room]
+					fmt.Printf("User %s disconnected\n", client.name)
+					delete(connectedClients, client)
+				default:
+					continue
+				}
+			}
+		}
+	}()
+
 	for {
 		// accepting new connection
 		conn, err := listener.Accept()
@@ -202,37 +208,70 @@ func main() {
 			}
 			fmt.Println("Connected new user:", client.name)
 			connectedClients[&client] = true
-			SendMessage(client.conn, []byte("Enter number of room, or enter \"0\" to create a new room:\n"))
-			roomList := make([]*roomInf, len(rooms))
-			i := 0
-			for room := range rooms{
-				SendMessage(client.conn, []byte(strconv.Itoa(i + 1) + ". " + room.name))
-				roomList[i] = room
-				i++
-			}
-			response, _  := GetMessage(client.conn)
-			num, _ := strconv.Atoi(string(response[:len(response) - 2]))
-			if num == 0 {
-				newRoom := CreateRoom(&client)
-				rooms[newRoom] = true
-				newClients[newRoom] = make(chan *clientInf, 100)
-				disconnectedClients[newRoom] = make(chan *clientInf, 100)
+			for {
+				if client.state == IN_ROOM {
+					continue
+				}
+				SendMessage(client.conn, []byte("Enter number of room, or enter \"0\" to create a new room:\n"))
+				roomList := make([]*roomInf, len(rooms))
+				i := 0
+				for room := range rooms{
+					SendMessage(client.conn, []byte(strconv.Itoa(i + 1) + ". " + room.name + "\n"))
+					roomList[i] = room
+					i++
+				}
+				var num int
+				for {
+					response, err  := GetMessage(client.conn)
+					if err != nil {
+						fmt.Printf("User %s disconnected\n", client.name)
+						return
+					}
+					num, err = strconv.Atoi(string(response[:len(response) - 2]))
+					if err != nil || num < 0 || num > len(rooms) {
+						SendMessage(client.conn, []byte("Enter valid number\n"))
+						continue
+					}
+					break
+				}
 				
-				go LaunchRoom(newRoom, newClients[newRoom], disconnectedClients[newRoom])
-				newClients[newRoom] <- &client
-				fmt.Println("hello, world!")
-				
-			} else {
-				SendMessage(client.conn, []byte("Enter password:\n"))
-				response, _  = GetMessage(client.conn)
-				if string(response) == roomList[num - 1].password {
-					newClients[roomList[num - 1]] <- &client
+				if num == 0 {
+					newRoom := CreateRoom(&client)
+					if newRoom == nil {
+						fmt.Printf("User %s disconnected\n", client.name)
+						return
+					}
+					rooms[newRoom] = true
+					newClients[newRoom] = make(chan *clientInf, 100)
+					disconnectedClients[newRoom] = make(chan *clientInf, 100)
+					
+					go LaunchRoom(newRoom, newClients[newRoom], disconnectedClients[newRoom])
+					client.state = IN_ROOM
+					newClients[newRoom] <- &client
+					fmt.Printf("User %s entered room %s\n", client.name, newRoom.name)
+					
 				} else {
-					SendMessage(client.conn, []byte("Wrong password!\n Try again:\n"))
+					SendMessage(client.conn, []byte("Enter password:\n"))
+					response, err  := GetMessage(client.conn)
+					if err != nil {
+						fmt.Printf("User %s disconnected\n", client.name)
+						return
+					}
+					if string(response) == roomList[num - 1].password {
+						client.state = IN_ROOM
+						newClients[roomList[num - 1]] <- &client
+						fmt.Printf("User %s entered room %s\n", client.name, roomList[num - 1].name)
+					} else {
+						SendMessage(client.conn, []byte("Wrong password!\n Try again:\n"))
+					}
+					
 				}
 			}
 			
+			
 		}(conn)
+
 	}
+
 }
 
